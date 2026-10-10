@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+        with:
+          path: sethucms-sdk-ts
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: pnpm install --no-frozen-lockfile
+        working-directory: sethucms-sdk-ts
+      - run: pnpm typecheck
+        working-directory: sethucms-sdk-ts
+      - run: pnpm build
+        working-directory: sethucms-sdk-ts
+      - run: pnpm test
+        working-directory: sethucms-sdk-ts
+
+
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          [ "${{ needs.test.result }}" = "success" ]

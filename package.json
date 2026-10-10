@@ -1,0 +1,45 @@
+{
+  "name": "@sethucms/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the SethuCMS API. Works in Node 20+, browsers and edge runtimes.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --test dist/tests/*.test.js",
+    "prepack": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SethuCMS/sethucms-sdk-ts.git"
+  },
+  "author": "Kasinadh Sarma",
+  "homepage": "https://github.com/SethuCMS/sethucms-sdk-ts#readme",
+  "bugs": {
+    "url": "https://github.com/SethuCMS/sethucms-sdk-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
