@@ -211,3 +211,71 @@ test('health check never throws', async () => {
   assert.equal(await new SethuClient({ ...base, fetch: fakeFetch([json({ status: 'ok' })]).fn }).isHealthy(), true);
   assert.equal(await new SethuClient({ ...base, fetch: fakeFetch([new Error('x')]).fn, maxRetries: 0 }).isHealthy(), false);
 });
+
+test('count: asks the count route with the same filters, and reads the result', async () => {
+  const { fn, seen } = fakeFetch([json({ data: { count: 3, exact: true } }), json({ data: { count: 1000, exact: false } })]);
+  const orders = new SethuClient({ ...base, fetch: fn }).collection('c 1', 'orders');
+
+  assert.deepEqual(await orders.where(eq('status', 'paid')).where(gt('total', 5)).count(), { count: 3, exact: true });
+  assert.deepEqual(await orders.count({ max: 1000 }), { count: 1000, exact: false });
+
+  assert.equal(seen[0]!.url.pathname, '/v1/connections/c%201/collections/orders/count');
+  assert.deepEqual(JSON.parse(seen[0]!.url.searchParams.get('filter')!), and(eq('status', 'paid'), gt('total', 5)));
+  assert.equal(seen[1]!.url.searchParams.has('filter'), false);
+  assert.equal(seen[1]!.url.searchParams.get('max'), '1000');
+  await assert.rejects(async () => orders.count({ max: 0 }), RangeError);
+});
+
+test('counts: one call for every collection', async () => {
+  const { fn, seen } = fakeFetch([json({ data: { orders: { count: 2, exact: true }, broken: null } })]);
+  const result = await new SethuClient({ ...base, fetch: fn }).counts('c/1');
+  assert.deepEqual(result, { orders: { count: 2, exact: true }, broken: null });
+  assert.equal(seen[0]!.url.pathname, '/v1/connections/c%2F1/counts');
+});
+
+test('drafts: create, schedule (Date or text), cancel and publish use the right verbs and bodies', async () => {
+  const draft = { id: 'draft_1', recordId: '7', values: {}, version: 1, status: 'draft', createdAt: 'x', updatedAt: 'x' };
+  const { fn, seen } = fakeFetch([
+    json({ data: draft }, 201),
+    json({ data: { ...draft, publishAt: '2026-12-01T03:30:00.000Z' } }),
+    json({ data: { ...draft, publishAt: '2026-12-01T09:00:00Z' } }),
+    json({ data: draft }),
+    json({ data: { draft: { ...draft, status: 'published' }, record: { id: 7 } } }),
+  ]);
+  const drafts = new SethuClient({ ...base, fetch: fn }).collection('c', 'orders').drafts;
+
+  const made = await drafts.create({ recordId: 7, values: { status: 'paid' } });
+  assert.equal(made.id, 'draft_1');
+  assert.equal(seen[0]!.method, 'POST');
+  assert.deepEqual(seen[0]!.body, { recordId: '7', values: { status: 'paid' } });
+  assert.ok(seen[0]!.headers['Idempotency-Key']);
+
+  await drafts.schedule('draft_1', new Date('2026-12-01T09:00:00+05:30'));
+  assert.equal(seen[1]!.method, 'PUT');
+  assert.equal(seen[1]!.url.pathname, '/v1/connections/c/collections/orders/drafts/draft_1/schedule');
+  assert.deepEqual(seen[1]!.body, { publishAt: '2026-12-01T03:30:00.000Z' });
+
+  await drafts.schedule('draft_1', '2026-12-01T09:00:00Z');
+  assert.deepEqual(seen[2]!.body, { publishAt: '2026-12-01T09:00:00Z' });
+
+  const cleared = await drafts.cancelSchedule('draft_1');
+  assert.equal(seen[3]!.method, 'DELETE');
+  assert.equal(cleared.publishAt, undefined);
+
+  const published = await drafts.publish('draft_1', { version: 1 });
+  assert.equal(seen[4]!.url.pathname, '/v1/connections/c/collections/orders/drafts/draft_1/publish');
+  assert.deepEqual(seen[4]!.body, { version: 1 });
+  assert.equal(published.draft.status, 'published');
+
+  await assert.rejects(drafts.schedule('draft_1', new Date('nope')), RangeError);
+});
+
+test('drafts: a draft id cannot change the path, and a refused schedule is a typed error', async () => {
+  const { fn, seen } = fakeFetch([json({ error: { code: 'CAPABILITY_UNSUPPORTED', message: 'Scheduled publishing needs a gateway that keeps running.', requestId: 'r1' } }, 422)]);
+  const drafts = new SethuClient({ ...base, fetch: fn }).collection('c', 'orders').drafts;
+  await assert.rejects(
+    drafts.schedule('../x', '2026-12-01T09:00:00Z'),
+    (error: unknown) => isSethuApiError(error) && error.code === 'CAPABILITY_UNSUPPORTED' && error.requestId === 'r1',
+  );
+  assert.equal(seen[0]!.url.pathname, '/v1/connections/c/collections/orders/drafts/..%2Fx/schedule');
+});

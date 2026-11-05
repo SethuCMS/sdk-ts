@@ -21,7 +21,7 @@ export interface ClientOptions {
 }
 
 export interface RequestSpec {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** Path below the base URL, already encoded. */
   path: string;
   query?: Record<string, string | undefined>;

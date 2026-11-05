@@ -22,6 +22,28 @@ await orders.update(created['id'] as number, { status: 'paid' });
 await orders.delete(created['id'] as number);
 ```
 
+## Counts
+
+```ts
+const { count, exact } = await orders.where(eq('status', 'paid')).count();   // exact: false means "at least"
+const all = await cms.counts('conn_123');                                       // every collection you can read, one call
+```
+
+Counting is capped (default 1000, `{ max }` up to 10000), so a huge table answers quickly. It uses your permissions, so it never counts rows a list would hide.
+
+## Drafts and scheduled publishing
+
+```ts
+const draft = await orders.drafts.create({ recordId: 7, values: { status: 'paid' } });
+await orders.drafts.schedule(draft.id, new Date('2026-12-01T09:00:00+05:30'));   // publishes by itself then
+await orders.drafts.cancelSchedule(draft.id);
+await orders.drafts.publish(draft.id, { version: draft.version });              // or publish now
+```
+
+A scheduled draft publishes its latest saved values with your permissions. If that fails (for example the record
+changed meanwhile) nothing is published and the draft's `scheduleError` says why. A gateway that runs serverless
+refuses to schedule with `CAPABILITY_UNSUPPORTED`.
+
 ## Errors
 
 Every failure is an `SethuApiError` with a stable `code`:

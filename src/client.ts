@@ -1,4 +1,4 @@
-import { Collection, type RecordData } from './collection.js';
+import { Collection, type CountResult, type RecordData } from './collection.js';
 import { HttpClient, type ClientOptions } from './http.js';
 
 export interface ConnectionInfo {
@@ -42,6 +42,19 @@ export class SethuClient {
     const response = await this.http.request<{ data: CollectionInfo[] }>({
       method: 'GET',
       path: `/v1/connections/${encodeURIComponent(connectionId)}/collections`,
+      ...options,
+    });
+    return response.data;
+  }
+
+  /**
+   * Record counts for every collection you can read, in one call. A collection that could not be
+   * counted is null. Counts are capped, so `exact: false` means "at least".
+   */
+  async counts(connectionId: string, options: { signal?: AbortSignal } = {}): Promise<Record<string, CountResult | null>> {
+    const response = await this.http.request<{ data: Record<string, CountResult | null> }>({
+      method: 'GET',
+      path: `/v1/connections/${encodeURIComponent(connectionId)}/counts`,
       ...options,
     });
     return response.data;
